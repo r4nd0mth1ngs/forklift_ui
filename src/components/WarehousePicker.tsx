@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { BinaryInfo, fk } from "../api";
+import { BinaryInfo, fk, installForklift } from "../api";
 import { asError } from "../common";
 import { useT } from "../terms";
 import forkliftIcon from "../assets/forklift-icon.png";
@@ -15,11 +15,29 @@ export function WarehousePicker(props: {
   recent: string[];
   onOpen: (path: string) => void;
   onOpenSettings: () => void;
+  onBinaryChanged: () => void;
 }) {
   const [pendingPrepare, setPendingPrepare] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [cloning, setCloning] = useState(false);
+  const [installing, setInstalling] = useState(false);
+
+  const install = async () => {
+    setInstalling(true);
+    setMessage("Installing forklift from its repo…");
+    try {
+      const output = await installForklift();
+      // Show the last useful line(s) the installer printed (path / version).
+      const tail = output.split("\n").map((l) => l.trim()).filter(Boolean).slice(-2).join(" · ");
+      setMessage(tail || "forklift installed.");
+      props.onBinaryChanged();
+    } catch (error) {
+      setMessage(asError(error).message);
+    } finally {
+      setInstalling(false);
+    }
+  };
   const t = useT();
 
   const choose = async () => {
@@ -113,10 +131,16 @@ export function WarehousePicker(props: {
           <div className="error-banner" style={{ margin: "0 0 16px" }}>
             <div className="code">forklift not found</div>
             <div>{props.binError}</div>
-            <div className="next">
-              <button className="btn sm" onClick={props.onOpenSettings} style={{ marginTop: 8 }}>
+            <div className="next" style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button className="btn primary sm" onClick={install} disabled={installing}>
+                {installing ? "Installing…" : "Install forklift"}
+              </button>
+              <button className="btn sm" onClick={props.onOpenSettings} disabled={installing}>
                 Set binary path…
               </button>
+            </div>
+            <div className="hint" style={{ marginTop: 6 }}>
+              Runs the forklift repo's installer (a prebuilt binary → <code>~/.local/bin</code>). Needs <code>curl</code>.
             </div>
           </div>
         ) : (

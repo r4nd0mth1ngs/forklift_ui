@@ -7,6 +7,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             forklift::detect_binary,
+            forklift::install_forklift,
             forklift::run_json,
             forklift::run_text,
         ])

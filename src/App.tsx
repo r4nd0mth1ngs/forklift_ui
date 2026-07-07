@@ -29,9 +29,13 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  useEffect(() => {
-    detectBinary().then(setBin).catch((e) => setBinError(e?.message ?? String(e)));
+  const refreshBinary = useCallback(() => {
+    detectBinary()
+      .then((info) => { setBin(info); setBinError(null); })
+      .catch((e) => setBinError(e?.message ?? String(e)));
   }, []);
+
+  useEffect(() => { refreshBinary(); }, [refreshBinary]);
 
   const notify = useCallback((kind: Toast["kind"], title: string, body?: string) => {
     const id = Date.now() + Math.random();
@@ -61,6 +65,7 @@ export default function App() {
           recent={recent}
           onOpen={openWarehouse}
           onOpenSettings={() => setSettingsOpen(true)}
+          onBinaryChanged={refreshBinary}
         />
       )}
 

@@ -187,6 +187,43 @@ pub fn detect_binary(bin_override: Option<String>) -> Result<BinaryInfo, Forklif
     Ok(BinaryInfo { path: bin.display().to_string(), version, source })
 }
 
+/// Install forklift from its repository using the canonical installer script (a prebuilt
+/// binary lands in `~/.local/bin`). This is the same one-liner the forklift repo publishes
+/// and that `self-update` re-runs. Resets the auto-detection cache so the freshly installed
+/// binary is picked up on the next `detect_binary`. Returns the installer's output.
+#[tauri::command]
+pub fn install_forklift() -> Result<String, ForkliftError> {
+    const INSTALL_SH: &str =
+        "curl -fsSL https://raw.githubusercontent.com/lonic-software/forklift/main/install.sh | sh";
+    const INSTALL_PS1: &str =
+        "irm https://raw.githubusercontent.com/lonic-software/forklift/main/install.ps1 | iex";
+
+    let output = if cfg!(windows) {
+        Command::new("powershell").args(["-NoProfile", "-Command", INSTALL_PS1]).output()
+    } else {
+        Command::new("sh").arg("-c").arg(INSTALL_SH).output()
+    }
+    .map_err(|error| {
+        ForkliftError::local(format!(
+            "Could not run the installer (needs curl + sh on PATH): {error}"
+        ))
+    })?;
+
+    // The installed binary changes what auto-resolution should pick; drop the cache.
+    *AUTO_BINARY.lock().expect("auto-binary cache poisoned") = None;
+
+    let stdout = strip_ansi(&String::from_utf8_lossy(&output.stdout));
+    let stderr = strip_ansi(&String::from_utf8_lossy(&output.stderr));
+
+    if output.status.success() {
+        let combined = format!("{stdout}\n{stderr}");
+        Ok(combined.trim().to_string())
+    } else {
+        let detail = if stderr.trim().is_empty() { stdout } else { stderr };
+        Err(ForkliftError::local(format!("The installer failed:\n{}", detail.trim())))
+    }
+}
+
 /// Run a forklift subcommand in `--json` mode and return its `data` payload. A failure
 /// envelope (`ok:false`) becomes an `Err(ForkliftError)` carrying the stable code.
 #[tauri::command]

@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
-  BinaryInfo, ConfigList, detectBinary, fk, getBinOverride, ProfileList, SelfUpdate, setBinOverride,
+  BinaryInfo, ConfigList, detectBinary, fk, getBinOverride, installForklift, ProfileList, SelfUpdate, setBinOverride,
 } from "../api";
 import { asError, useLoad } from "../common";
 import { Modal, Field } from "./Modal";
@@ -110,6 +110,7 @@ function BinaryTab({ onDetected }: { onDetected: (info: BinaryInfo) => void }) {
   const [path, setPath] = useState(getBinOverride() ?? "");
   const [status, setStatus] = useState<string | null>(null);
   const [ok, setOk] = useState<boolean | undefined>();
+  const [busy, setBusy] = useState(false);
 
   const test = async () => {
     setBinOverride(path);
@@ -126,13 +127,36 @@ function BinaryTab({ onDetected }: { onDetected: (info: BinaryInfo) => void }) {
     }
   };
 
+  const install = async () => {
+    setBusy(true);
+    setStatus("Installing forklift from its repo…");
+    setOk(undefined);
+    try {
+      await installForklift();
+      const info = await detectBinary();
+      setOk(true);
+      setStatus(`Installed — forklift ${info.version} at ${info.path}`);
+      onDetected(info);
+    } catch (e) {
+      setOk(false);
+      setStatus(asError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
-      <Field label="Path to the forklift binary" hint="Resolution: this override → FORKLIFT_BIN → forklift on PATH → a sibling ../forklift/target/release build.">
+      <Field label="Path to the forklift binary" hint="Resolution: this override → FORKLIFT_BIN → the newest forklift found across ~/.local/bin, ~/.cargo/bin, Homebrew, PATH, and a sibling dev build.">
         <input value={path} placeholder="leave blank to auto-detect" onChange={(e) => setPath(e.target.value)} className="text-input" />
       </Field>
       <Status text={status} ok={ok} />
-      <div className="actions"><button className="btn primary" onClick={test}>Test &amp; save</button></div>
+      <div className="actions">
+        <button className="btn" onClick={install} disabled={busy} title="Run the forklift repo's installer (a prebuilt binary → ~/.local/bin)">
+          {busy ? "Installing…" : "Install forklift"}
+        </button>
+        <button className="btn primary" onClick={test} disabled={busy}>Test &amp; save</button>
+      </div>
     </>
   );
 }

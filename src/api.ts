@@ -45,6 +45,11 @@ export function detectBinary(): Promise<BinaryInfo> {
   return invoke<BinaryInfo>("detect_binary", { binOverride });
 }
 
+/** Install forklift from its repo (the official installer script). Returns the output. */
+export function installForklift(): Promise<string> {
+  return invoke<string>("install_forklift");
+}
+
 // ---- Signing passphrase -----------------------------------------------------
 // Held in memory only (never localStorage). Passed through to `forklift` as
 // FORKLIFT_KEY_PASSPHRASE so a protected key can be unlocked / a new key protected
