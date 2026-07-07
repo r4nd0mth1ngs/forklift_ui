@@ -21,8 +21,10 @@ Grab the latest build from **[Releases](https://github.com/r4nd0mth1ngs/forklift
 | Linux (portable) | `…_amd64.AppImage` |
 | Linux (Debian/Ubuntu) | `…_amd64.deb` |
 | Linux (Fedora/RHEL) | `…-1.x86_64.rpm` |
+| Windows (installer) | `…_x64_en-US.msi` |
+| Windows (setup) | `…_x64-setup.exe` |
 
-macOS builds are unsigned, so on first launch: **right-click → Open**.
+macOS builds are unsigned (first launch: **right-click → Open**); Windows may show a SmartScreen prompt (**More info → Run anyway**).
 
 You also need a `forklift` binary — the app **auto-detects** it, or **installs it for you**
 (the welcome screen and *Settings → Binary* have an **Install forklift** button that runs the
@@ -119,7 +121,7 @@ Linux on GitHub runners and publishes a GitHub Release with all artifacts. To cu
 version in `src-tauri/tauri.conf.json` (and `package.json` / `src-tauri/Cargo.toml`), then:
 
 ```sh
-git tag v0.1.1 && git push origin v0.1.1
+git tag v0.1.2 && git push origin v0.1.2
 ```
 
 ## License

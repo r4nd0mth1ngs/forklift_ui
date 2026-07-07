@@ -20,6 +20,9 @@ jobs:
           # Linux (.deb + .AppImage + .rpm).
           - platform: ubuntu-22.04
             args: ""
+          # Windows (.msi + .exe / NSIS).
+          - platform: windows-latest
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
