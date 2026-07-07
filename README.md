@@ -116,9 +116,9 @@ cd src-tauri && cargo test
 
 ## Releases
 
-Tagging `vX.Y.Z` triggers `.github/workflows/release.yml`, which builds macOS (universal) and
-Linux on GitHub runners and publishes a GitHub Release with all artifacts. To cut one: bump the
-version in `src-tauri/tauri.conf.json` (and `package.json` / `src-tauri/Cargo.toml`), then:
+Tagging `vX.Y.Z` triggers `.github/workflows/release.yml`, which builds macOS (universal), Linux,
+and Windows on GitHub runners and publishes a GitHub Release with all artifacts. To cut one: bump
+the version in `src-tauri/tauri.conf.json` (and `package.json` / `src-tauri/Cargo.toml`), then:
 
 ```sh
 git tag v0.1.2 && git push origin v0.1.2
