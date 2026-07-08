@@ -6,8 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "── pnpm install"
-pnpm install
+echo "── pnpm install (frozen — like CI, and so it never mutates pnpm-lock.yaml)"
+pnpm install --frozen-lockfile
 
 echo "── pnpm build (tsc typecheck + vite build → dist/)"
 pnpm build

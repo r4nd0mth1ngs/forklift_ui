@@ -36,11 +36,19 @@ New-Item -ItemType Directory $Tmp | Out-Null
 try {
     $Setup = Join-Path $Tmp $Asset
     Write-Host "downloading $Base/$Asset"
-    Invoke-WebRequest "$Base/$Asset" -OutFile $Setup
+    Invoke-WebRequest "$Base/$Asset" -OutFile $Setup -UseBasicParsing
 
-    # Best effort: verify against checksums.txt if the release ships one.
+    # Best effort: verify against checksums.txt if the release ships one. Only the
+    # fetch is in the catch — a missing checksums.txt 404s (WebException on Windows
+    # PowerShell, HttpResponseException on pwsh 7), and either way we just skip. A
+    # genuine checksum MISMATCH throws below, outside the catch, so it still aborts.
+    $sums = $null
     try {
-        $sums = (Invoke-WebRequest "$Base/checksums.txt").Content -split "`n"
+        $sums = (Invoke-WebRequest "$Base/checksums.txt" -UseBasicParsing).Content -split "`n"
+    } catch {
+        # No checksums.txt in this release — skip verification.
+    }
+    if ($sums) {
         $line = $sums | Where-Object { $_ -match [regex]::Escape($Asset) }
         if ($line) {
             $expected = ($line -split '\s+')[0]
@@ -48,26 +56,29 @@ try {
             if ($expected -ne $actual) { throw "checksum verification FAILED for $Asset - refusing to install" }
             Write-Host "  checksum ok"
         }
-    } catch [System.Net.WebException] { }
+    }
 
     Write-Host "running the installer (silent, per-user)..."
     Start-Process -FilePath $Setup -ArgumentList "/S" -Wait
 
-    # The NSIS setup installs to %LOCALAPPDATA%\forklift-gui by default. Locate the exe
-    # (search a couple of likely roots) so we can put it on PATH and confirm the install.
-    $exe = $null
-    foreach ($root in @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)})) {
-        if (-not $root) { continue }
-        $found = Get-ChildItem -Path $root -Filter "forklift-gui.exe" -Recurse -ErrorAction SilentlyContinue |
-                 Select-Object -First 1
-        if ($found) { $exe = $found.FullName; break }
+    # tauri's NSIS setup installs per-user to %LOCALAPPDATA%\forklift-gui. Check that
+    # first, then fall back to a bounded search of LOCALAPPDATA — never Program Files,
+    # where a per-user install can't land.
+    $InstallDir = Join-Path $env:LOCALAPPDATA "forklift-gui"
+    $exe = Join-Path $InstallDir "forklift-gui.exe"
+    if (-not (Test-Path $exe)) {
+        $found = Get-ChildItem -Path $env:LOCALAPPDATA -Filter "forklift-gui.exe" `
+                     -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { $exe = $found.FullName; $InstallDir = Split-Path $exe } else { $exe = $null }
     }
 
     if ($exe) {
-        $InstallDir = Split-Path $exe
         Write-Host "installed $exe"
         $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        if ($UserPath -notlike "*$InstallDir*") {
+        if ([string]::IsNullOrEmpty($UserPath)) {
+            [Environment]::SetEnvironmentVariable("Path", $InstallDir, "User")
+            Write-Host "added $InstallDir to your user PATH (restart your terminal, then run 'forklift-gui')"
+        } elseif ($UserPath -notlike "*$InstallDir*") {
             [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
             Write-Host "added $InstallDir to your user PATH (restart your terminal, then run 'forklift-gui')"
         } else {

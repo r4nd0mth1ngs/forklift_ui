@@ -15,7 +15,10 @@
 #   FORKLIFT_GUI_APP_DIR      macOS only: where to put the .app  (default: /Applications)
 #   FORKLIFT_GUI_REPO         GitHub repo slug                   (default: r4nd0mth1ngs/forklift_ui)
 #   FORKLIFT_GUI_BASE_URL     full base URL for the assets (mirrors / air-gapped setups);
-#                             overrides FORKLIFT_GUI_REPO/FORKLIFT_GUI_VERSION entirely
+#                             overrides FORKLIFT_GUI_REPO. On Linux the asset filename
+#                             embeds the version, so pair it with FORKLIFT_GUI_VERSION
+#                             there (the installer never calls the GitHub API when it is
+#                             set). macOS needs neither — its app.tar.gz is unversioned.
 set -eu
 
 REPO="${FORKLIFT_GUI_REPO:-r4nd0mth1ngs/forklift_ui}"
@@ -73,6 +76,11 @@ resolve_num() {
     if [ "$VERSION" != "latest" ]; then
         printf '%s\n' "${VERSION#v}"
         return
+    fi
+    # With a mirror/air-gapped base URL there is no GitHub API to ask, and the
+    # versioned filename needs a number — so require an explicit version there.
+    if [ -n "${FORKLIFT_GUI_BASE_URL:-}" ]; then
+        err "FORKLIFT_GUI_BASE_URL is set but FORKLIFT_GUI_VERSION is not — the Linux asset filename embeds the version, so set FORKLIFT_GUI_VERSION too (e.g. v0.1.4)"
     fi
     api="https://api.github.com/repos/${REPO}/releases/latest"
     num=$(fetch_stdout "$api" \
