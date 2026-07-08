@@ -60,7 +60,7 @@ export const TERMS = {
   lower: { forklift: "Lower", git: "Pull", melo: "Lehúz", brainrot: "Pull Up" },
   franchise: { forklift: "Franchise", git: "Clone", melo: "Másol", brainrot: "Copypasta" },
   park: { forklift: "Park", git: "Stash", melo: "Dugdos", brainrot: "Bench It" },
-  undo: { forklift: "Undo", git: "Undo", melo: "Visszavon", brainrot: "My Bad" },
+  undo: { forklift: "Undo", git: "Undo", melo: "Visszavon", brainrot: "Hell Nah" },
   audit: { forklift: "Audit", git: "Verify", melo: "Átvizsgál", brainrot: "Vibe Check" },
   prepare: { forklift: "Prepare", git: "Init", melo: "Kezd", brainrot: "Spawn" },
   stocktake: { forklift: "Stocktake", git: "Status", melo: "Miafasz", brainrot: "What's Good" },
