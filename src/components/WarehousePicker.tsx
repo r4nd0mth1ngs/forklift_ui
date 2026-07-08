@@ -1,7 +1,7 @@
 // The launch screen: open an existing warehouse (native folder dialog), pick from recent
 // ones, or prepare a new warehouse in a chosen folder.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { BinaryInfo, fk, installForklift } from "../api";
@@ -194,13 +194,7 @@ export function WarehousePicker(props: {
           <div style={{ marginTop: 20 }}>
             <div className="section-label" style={{ padding: "0 0 4px" }}>Recent</div>
             {props.recent.map((path) => (
-              <button key={path} className="recent-item" onClick={() => tryOpen(path)} disabled={busy}>
-                <span>📦</span>
-                <div style={{ overflow: "hidden" }}>
-                  <div style={{ fontWeight: 600 }}>{basename(path)}</div>
-                  <div className="rpath">{path}</div>
-                </div>
-              </button>
+              <RecentItem key={path} path={path} disabled={busy} onOpen={() => tryOpen(path)} />
             ))}
           </div>
         )}
@@ -212,6 +206,38 @@ export function WarehousePicker(props: {
 function basename(path: string): string {
   const parts = path.replace(/[/\\]+$/, "").split(/[/\\]/);
   return parts[parts.length - 1] || path;
+}
+
+/** A recent-warehouse row with a thin object-store compaction bar along its bottom edge. */
+function RecentItem({ path, disabled, onOpen }: { path: string; disabled: boolean; onOpen: () => void }) {
+  const [pct, setPct] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fk.store(path)
+      .then((s) => {
+        if (!live) return;
+        const total = s.loose_objects + s.packed_objects;
+        setPct(total > 0 ? Math.round((s.packed_objects / total) * 100) : 100);
+      })
+      .catch(() => { /* not a warehouse / no binary — just no bar */ });
+    return () => { live = false; };
+  }, [path]);
+
+  return (
+    <button className="recent-item" onClick={onOpen} disabled={disabled}>
+      <span>📦</span>
+      <div style={{ overflow: "hidden", flex: 1 }}>
+        <div style={{ fontWeight: 600 }}>{basename(path)}</div>
+        <div className="rpath">{path}</div>
+      </div>
+      {pct != null && (
+        <div className="recent-bar" title={`${pct}% packed`}>
+          <i style={{ width: `${pct}%` }} />
+        </div>
+      )}
+    </button>
+  );
 }
 
 function FranchiseForm({ onCancel, onCloned }: { onCancel: () => void; onCloned: (path: string) => void }) {
