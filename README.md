@@ -11,6 +11,40 @@ format. It drives the `forklift` CLI through its stable, versioned machine inter
 deterministic exit codes — is the *only* thing this app couples to, so it keeps working across
 Forklift's internal changes.
 
+## Install
+
+**With [pult](https://github.com/lonic-software/pult)** — an npx-style launcher for a repo's
+operational commands. One command fetches the installer, drops the app in place, and exposes a
+`forklift-gui` launcher on your PATH:
+
+```sh
+pult x github.com/r4nd0mth1ngs/forklift_ui install
+```
+
+**Without pult** — a one-liner that does the same thing:
+
+```sh
+# macOS / Linux — installs the app and a `forklift-gui` launcher
+curl -fsSL https://raw.githubusercontent.com/r4nd0mth1ngs/forklift_ui/main/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell) — runs the setup (per-user, no admin) and adds it to your PATH
+irm https://raw.githubusercontent.com/r4nd0mth1ngs/forklift_ui/main/install.ps1 | iex
+```
+
+What it installs per OS:
+
+| OS | App | `forklift-gui` command |
+|----|-----|------------------------|
+| macOS | `forklift-gui.app` → `/Applications` (or `~/Applications`) | shim in `~/.local/bin` that runs `open -a` on it |
+| Linux | the portable `.AppImage` → `~/.local/bin/forklift-gui` (+ a `.desktop` menu entry) | the AppImage itself |
+| Windows | the NSIS setup → `%LOCALAPPDATA%\forklift-gui` (+ Start Menu shortcut) | the install dir, added to your user PATH |
+
+Pin a version or point at a mirror with the `FORKLIFT_GUI_VERSION`, `FORKLIFT_GUI_INSTALL_DIR`,
+`FORKLIFT_GUI_APP_DIR`, `FORKLIFT_GUI_REPO`, or `FORKLIFT_GUI_BASE_URL` environment variables (see
+the header comments in `install.sh` / `install.ps1`). Or grab a build by hand from Releases:
+
 ## Download
 
 Grab the latest build from **[Releases](https://github.com/r4nd0mth1ngs/forklift_ui/releases/latest)**:
@@ -107,6 +141,9 @@ pnpm tauri dev      # run the app with hot reload
 pnpm tauri build    # produce a distributable bundle
 pnpm build          # typecheck + build the frontend only
 ```
+
+These are also wired into [pult](https://github.com/lonic-software/pult): run `pult` in the repo
+for a guided menu (`dev` / `build` / `install`), or `pult <id>` directly. See `pult.yaml`.
 
 Backend tests exercise the real `forklift` binary end-to-end:
 
