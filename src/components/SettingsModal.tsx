@@ -5,13 +5,13 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
-  BinaryInfo, ConfigList, detectBinary, fk, getBinOverride, installForklift, ProfileList, SelfUpdate, setBinOverride,
+  BinaryInfo, CompactResult, ConfigList, detectBinary, fk, getBinOverride, installForklift, ProfileList, SelfUpdate, setBinOverride, StoreHealth,
 } from "../api";
 import { asError, useLoad } from "../common";
 import { Modal, Field } from "./Modal";
 import { TERMS, TermKey, useTerms, VOCABULARIES } from "../terms";
 
-type Tab = "terms" | "binary" | "config" | "profiles" | "git" | "inspect" | "updates";
+type Tab = "terms" | "binary" | "config" | "profiles" | "git" | "store" | "inspect" | "updates";
 
 export function SettingsModal(props: { wh?: string; binVersion?: string; onClose: () => void; onDetected: (info: BinaryInfo) => void }) {
   const [tab, setTab] = useState<Tab>("terms");
@@ -23,6 +23,7 @@ export function SettingsModal(props: { wh?: string; binVersion?: string; onClose
     { key: "config", label: "Config", needsWh: true },
     { key: "profiles", label: "Profiles", needsWh: true },
     { key: "git", label: "Git", needsWh: true },
+    { key: "store", label: "Store", needsWh: true },
     { key: "inspect", label: "Inspect", needsWh: true },
     { key: "updates", label: "Updates" },
   ];
@@ -41,6 +42,7 @@ export function SettingsModal(props: { wh?: string; binVersion?: string; onClose
         {tab === "config" && wh && <ConfigTab wh={wh} />}
         {tab === "profiles" && wh && <ProfilesTab wh={wh} />}
         {tab === "git" && wh && <GitTab wh={wh} />}
+        {tab === "store" && wh && <StoreTab wh={wh} />}
         {tab === "inspect" && wh && <InspectTab wh={wh} />}
         {tab === "updates" && <UpdatesTab binVersion={props.binVersion} onDetected={props.onDetected} />}
       </div>
@@ -318,6 +320,98 @@ function InspectTab({ wh }: { wh: string }) {
         </pre>
       )}
     </>
+  );
+}
+
+// ---- Store (object-store health + compaction) -------------------------------
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function StoreTab({ wh }: { wh: string }) {
+  const [reload, setReload] = useState(0);
+  const { data, error, loading } = useLoad<StoreHealth>(() => fk.store(wh), [wh, reload]);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const compact = async (all: boolean) => {
+    setBusy(true);
+    setStatus(all ? "Repacking…" : "Compacting…");
+    try {
+      const r: CompactResult = await fk.compact(wh, all);
+      setStatus(r.objects_packed > 0
+        ? `Packed ${r.objects_packed} object${r.objects_packed === 1 ? "" : "s"} into ${r.packs_written} pack${r.packs_written === 1 ? "" : "s"} (${r.deltas} deltas).`
+        : "Nothing to compact — the store is already packed.");
+      setReload((n) => n + 1);
+    } catch (e) {
+      setStatus(asError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading && !data) return <div className="hint">Reading the object store…</div>;
+  if (error) return <Status text={error.message} ok={false} />;
+  if (!data) return null;
+
+  const total = data.loose_objects + data.packed_objects;
+  const packedPct = total > 0 ? Math.round((data.packed_objects / total) * 100) : 100;
+  const due = data.maintenance.compaction_due || data.maintenance.repack_due;
+
+  return (
+    <>
+      {/* Compaction ratio bar */}
+      <div style={{ marginBottom: 6, display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontWeight: 700, fontSize: 15 }}>{packedPct}% packed</span>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          {data.packed_objects} packed · {data.loose_objects} loose · {total} objects
+        </span>
+        {due && <span className="pill" style={{ marginLeft: "auto", background: "var(--amber-bg)", color: "var(--amber)" }}>compaction due</span>}
+      </div>
+      <div style={{ height: 14, borderRadius: 7, overflow: "hidden", display: "flex", border: "1px solid var(--border)", background: "var(--panel-2)" }} title={`${data.packed_objects} packed, ${data.loose_objects} loose`}>
+        <div style={{ width: `${packedPct}%`, background: "var(--green)", transition: "width 0.3s" }} />
+        <div style={{ width: `${100 - packedPct}%`, background: "var(--amber)", transition: "width 0.3s" }} />
+      </div>
+      <div style={{ display: "flex", gap: 4, fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+        <span style={{ color: "var(--green)" }}>■ packed</span>
+        <span style={{ color: "var(--amber)" }}>■ loose</span>
+        <span style={{ marginLeft: "auto" }}>total {fmtBytes(data.total_bytes)}</span>
+      </div>
+
+      {/* Detail grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", margin: "16px 0", fontSize: 12.5 }}>
+        <StoreStat label="Loose objects" value={`${data.loose_objects} · ${fmtBytes(data.loose_bytes)}`} />
+        <StoreStat label="Packed objects" value={`${data.packed_objects} · ${fmtBytes(data.pack_bytes)}`} />
+        <StoreStat label="Pack files" value={`${data.pack_files}`} />
+        <StoreStat label="Delta-compressed" value={`${data.deltas}`} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="btn primary" disabled={busy || data.loose_objects === 0} onClick={() => compact(false)}>
+          {busy ? "Working…" : "Compact"}
+        </button>
+        <button className="btn" disabled={busy} onClick={() => compact(true)} title="Full repack: also drop unreachable objects and consolidate existing packs">
+          Full repack
+        </button>
+        <button className="btn ghost sm" disabled={busy} onClick={() => setReload((n) => n + 1)}>Refresh</button>
+      </div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        Compact packs loose objects into dense pack files. {data.maintenance.auto ? "Auto-maintenance is on, so this usually happens on its own." : "Auto-maintenance is off."}
+      </div>
+      <Status text={status} />
+    </>
+  );
+}
+
+function StoreStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 3 }}>
+      <span style={{ color: "var(--text-dim)" }}>{label}</span>
+      <span style={{ fontFamily: "var(--mono)" }}>{value}</span>
+    </div>
   );
 }
 

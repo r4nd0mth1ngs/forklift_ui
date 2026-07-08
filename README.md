@@ -74,7 +74,7 @@ probes every known location — a sibling `../forklift/target/release` dev build
 | **Manifest** | `manifest` (note / approve / provenance / show) | Signed post-metadata incl. AI provenance |
 | **Bays** | `bay` (add / remove / list) | Worktrees |
 | **Top bar** | `park`, `undo`, `lift`, `lower` | Stash, undo, push, pull |
-| **Settings** | `config`, `profile`, `import-git`, `export-git`, `peek`, `self-update` | Config editor, profiles, git interop, object inspect, updates with version cards |
+| **Settings** | `config`, `profile`, `import-git`, `export-git`, `store`, `compact`, `peek`, `self-update` | Config editor, profiles, git interop, **object-store health + compaction bar**, object inspect, updates with version cards |
 
 **Signing without a terminal** — office/tag/manifest/haul operations sign, but a GUI has no TTY.
 A top-bar **🔒 lock** sets an in-memory passphrase, passed to forklift as

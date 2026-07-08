@@ -280,6 +280,39 @@ export interface SelfUpdate {
   message?: string;
 }
 
+export interface StorePack {
+  id: string;
+  objects: number;
+  deltas: number;
+  bytes: number;
+}
+export interface StoreMaintenance {
+  auto: boolean;
+  compaction_due: boolean;
+  repack_due: boolean;
+  loose_threshold: number;
+  pack_threshold: number;
+}
+export interface StoreHealth {
+  loose_objects: number;
+  loose_bytes: number;
+  packed_objects: number;
+  pack_files: number;
+  pack_bytes: number;
+  deltas: number;
+  total_bytes: number;
+  packs: StorePack[];
+  maintenance: StoreMaintenance;
+}
+export interface CompactResult {
+  all: boolean;
+  objects_packed: number;
+  loose_removed: number;
+  packs_written: number;
+  deltas: number;
+  bytes_packed: number;
+}
+
 // ---- Typed command surface --------------------------------------------------
 
 export const fk = {
@@ -365,6 +398,10 @@ export const fk = {
   importGit: (wh: string, path: string) => json(wh, ["import-git", path]),
   exportGit: (wh: string, path: string) => json(wh, ["export-git", path]),
   selfUpdate: (check: boolean) => json<SelfUpdate>(undefined, ["self-update", ...(check ? ["--check"] : [])]),
+
+  // Object store maintenance (v0.1.4+)
+  store: (wh: string) => json<StoreHealth>(wh, ["store"]),
+  compact: (wh: string, all = false) => json<CompactResult>(wh, ["compact", ...(all ? ["--all"] : [])]),
 
   // Remote
   lift: (wh: string) => json(wh, ["lift"]),
