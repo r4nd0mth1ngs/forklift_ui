@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lonic-software/pult/v0.2.1/pult.schema.json
+# pult manifest — the operational commands for forklift-gui maintainers.
+# Authoring guide: https://github.com/lonic-software/pult/blob/v0.2.1/docs/authoring.md
+#
+# Run `pult` for the guided menu, or `pult <id>`. Real logic lives in ./bin.
+version: 1
+name: forklift-gui
+
+commands:
+  - id: dev
+    title: Run the app in dev mode (Vite + Tauri, hot reload)
+    run: "pnpm install && pnpm tauri dev"
+
+  - id: build
+    title: Build the desktop bundles for this OS (dmg / AppImage / deb / rpm / msi / exe)
+    run: "pnpm install && pnpm tauri build"
+
+  - id: check
+    title: The pre-release gate — typecheck + build the frontend, then cargo test
+    run: "./bin/check"
+
+  - id: test
+    title: Run the Rust tests (fast loop; forwards args to cargo test)
+    run: "./bin/test"
+
+  - id: release
+    title: Cut a release (bump the version everywhere → commit → tag → push; CI builds & publishes)
+    params:
+      # next patch / minor / major from the latest v* tag; patch is the default
+      version: { pick: { from: "./bin/release-candidates" } }
+    run: "./bin/release {version}"
+
+  - id: install
+    title: Install the Forklift GUI from the latest release (same as the module)
+    run: "./bin/install"

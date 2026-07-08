@@ -1,0 +1,33 @@
+#!/bin/sh
+# Forklift GUI installer entry point for pult (`pult x .../forklift_ui install`).
+#
+# One door, OS-native behind it. pult runs this via a POSIX shell, so on macOS and
+# Linux the POSIX installer (install.sh) is the whole story. On Windows the
+# PowerShell installer (install.ps1) does what the POSIX path can't from inside
+# Git Bash: it runs the native setup and persists the *native* user PATH via the
+# registry. So on Windows we route to it; everywhere else, install.sh.
+#
+# Honors the same FORKLIFT_GUI_* environment overrides as the two installers.
+set -eu
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)   # this bin/ directory
+root=$(dirname -- "$here")                           # module root (repo root)
+
+is_windows() {
+    case "${OS:-}$(uname -s 2>/dev/null || true)" in
+        *Windows_NT* | *MINGW* | *MSYS* | *CYGWIN*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+if is_windows; then
+    # Prefer PowerShell 7 (pwsh); fall back to Windows PowerShell.
+    ps=pwsh
+    command -v pwsh >/dev/null 2>&1 || ps=powershell
+    script="$root/install.ps1"
+    # Hand PowerShell a native Windows path, not an MSYS one, when we can.
+    command -v cygpath >/dev/null 2>&1 && script=$(cygpath -w "$script")
+    exec "$ps" -NoProfile -ExecutionPolicy Bypass -File "$script"
+fi
+
+exec "$root/install.sh"

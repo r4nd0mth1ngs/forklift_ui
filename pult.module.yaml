@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lonic-software/pult/v0.2.1/pult.schema.json
+# pult module — run it without cloning:  pult x github.com/r4nd0mth1ngs/forklift_ui install
+# authoring guide: https://github.com/lonic-software/pult/blob/v0.2.1/docs/authoring.md
+version: 1
+name: forklift-gui
+description: Install the Forklift desktop GUI from the latest release (any OS).
+
+commands:
+  - id: install
+    title: Install the Forklift GUI from the latest release
+    # One entry point; bin/install picks install.sh (macOS/Linux) or, on Windows,
+    # install.ps1 (native setup + persistent PATH). See bin/install.
+    run: "${module.dir}/bin/install"
