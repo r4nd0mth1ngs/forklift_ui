@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Fast Rust test loop. Tauri's build.rs needs ../dist to compile, so build the
+# frontend first if it's missing, then hand any extra args straight to cargo:
+#   ./bin/test                       # everything
+#   ./bin/test forklift::            # a module
+#   ./bin/test -- --nocapture        # cargo/libtest flags
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -d dist ]; then
+  echo "── dist/ missing — building the frontend first (Tauri needs it to compile)"
+  pnpm install && pnpm build
+fi
+
+echo "── cargo test"
+cd src-tauri
+exec cargo test "$@"

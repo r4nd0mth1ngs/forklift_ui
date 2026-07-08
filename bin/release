@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Cut a release: preflight → checks → bump the version everywhere → commit →
+# tag → push. Pushing the v* tag triggers .github/workflows/release.yml, which
+# builds macOS / Linux / Windows and publishes the GitHub release with every
+# installer artifact.
+#
+# The version lives in four places that must stay in lockstep — package.json,
+# src-tauri/tauri.conf.json, src-tauri/Cargo.toml, and src-tauri/Cargo.lock —
+# which is exactly why doing this by hand is error-prone. This bumps all four.
+#
+# usage: release <version> [--dry-run]
+#   <version>   x.y.z (a leading v is tolerated)
+#   --dry-run   run every check and the edits, show the diff, then revert — no
+#               commit, tag, or push
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+version=${1:?usage: release <version> [--dry-run]}
+version=${version#v}
+dry_run=${2:-}
+
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  { echo "release: '$version' is not x.y.z" >&2; exit 1; }
+
+echo "── preflight"
+[ -z "$(git status --porcelain)" ] ||
+  { echo "release: working tree not clean" >&2; exit 1; }
+[ "$(git rev-parse --abbrev-ref HEAD)" = main ] ||
+  { echo "release: not on main" >&2; exit 1; }
+git fetch --tags origin main
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
+  { echo "release: main is not in sync with origin/main" >&2; exit 1; }
+! git rev-parse --verify --quiet "refs/tags/v$version" >/dev/null ||
+  { echo "release: tag v$version already exists" >&2; exit 1; }
+
+./bin/check
+
+echo "── set the version to $version"
+# Each edit asserts it changed exactly one line/stanza, so a moved or renamed
+# field fails loudly instead of silently leaving a file un-bumped.
+V="$version" perl -pi -e 's/^(\s*"version":\s*")[^"]*(",)$/$1$ENV{V}$2/ and $n++; END{ $n==1 or die "package.json: expected 1 version line, got $n\n" }' package.json
+V="$version" perl -pi -e 's/^(\s*"version":\s*")[^"]*(",)$/$1$ENV{V}$2/ and $n++; END{ $n==1 or die "tauri.conf.json: expected 1 version line, got $n\n" }' src-tauri/tauri.conf.json
+V="$version" perl -pi -e 's/^(version = ")[^"]*(")$/$1$ENV{V}$2/ and $n++; END{ $n==1 or die "Cargo.toml: expected 1 [package] version line, got $n\n" }' src-tauri/Cargo.toml
+V="$version" perl -0pi -e 's/(name = "forklift-gui"\nversion = ")[^"]*(")/$1$ENV{V}$2/ and $n++; END{ $n==1 or die "Cargo.lock: expected 1 forklift-gui stanza, got $n\n" }' src-tauri/Cargo.lock
+
+files="package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock"
+git --no-pager diff --stat -- $files
+
+if [ "$dry_run" = "--dry-run" ]; then
+  git checkout -- $files
+  echo "release: dry run — reverted the bump; would have released v$version"
+  exit 0
+fi
+
+echo "── commit, tag, push"
+git add $files
+git commit -m "v$version"
+git tag "v$version"
+git push origin main "v$version"
+
+echo
+echo "release: v$version pushed — CI is building the installers:"
+echo "  https://github.com/r4nd0mth1ngs/forklift_ui/actions"
+echo "when it finishes, the install one-liners serve the new release automatically."

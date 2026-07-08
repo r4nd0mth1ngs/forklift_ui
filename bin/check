@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# The pre-release gate: typecheck + build the frontend, then run the Rust tests.
+# Green here means `pult release` sails through the same checks. The order
+# matters — Tauri's build.rs needs ../dist to exist, so the frontend builds
+# before anything touches cargo. Clippy is report-only (style debt is separate).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "── pnpm install"
+pnpm install
+
+echo "── pnpm build (tsc typecheck + vite build → dist/)"
+pnpm build
+
+echo "── cargo test (src-tauri)"
+( cd src-tauri && cargo test )
+
+echo "── cargo clippy (report-only, like the reference)"
+( cd src-tauri && cargo clippy ) || true
+
+echo "check: frontend + tests green"
