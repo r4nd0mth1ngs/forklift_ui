@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BinaryInfo, fk, installForklift } from "../api";
 import { asError } from "../common";
 import { useT } from "../terms";
-import forkliftIcon from "../assets/forklift-icon.png";
+import { SplashAnimation } from "./SplashAnimation";
 
 export function WarehousePicker(props: {
   bin: BinaryInfo | null;
@@ -123,7 +123,7 @@ export function WarehousePicker(props: {
   return (
     <div className="welcome">
       <div className="welcome-card">
-        <img src={forkliftIcon} className="logo-img" alt="Forklift" />
+        <SplashAnimation />
         <h1>Forklift</h1>
         <div className="tag">Move and organize your packages.</div>
 

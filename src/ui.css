@@ -370,6 +370,86 @@ button {
 .welcome-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 34px; width: 440px; max-width: 90%; }
 .welcome-card .logo { font-size: 46px; text-align: center; }
 .welcome-card .logo-img { width: 84px; height: 84px; object-fit: contain; display: block; margin: 0 auto 4px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.18)); }
+
+/* ---- Splash animation: forklift flattens Clippy ---- */
+
+.splash-anim { width: 100%; max-width: 340px; height: auto; display: block; margin: 0 auto 2px; }
+.splash-ground { stroke: var(--border); stroke-width: 2; stroke-linecap: round; }
+.splash-shadow { fill: rgba(0, 0, 0, 0.14); }
+@media (prefers-color-scheme: dark) { .splash-shadow { fill: rgba(0, 0, 0, 0.4); } }
+
+/* Clippy */
+.splash-clip { fill: none; stroke: #aeb6c2; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.splash-brow { stroke: #6b7581; stroke-width: 2; stroke-linecap: round; }
+.splash-eye { fill: #ffffff; stroke: #6b7581; stroke-width: 1.2; }
+.splash-pupil { fill: #1c2128; }
+.splash-eyes-dead line { stroke: #1c2128; stroke-width: 2.4; stroke-linecap: round; }
+.splash-eyes-dead { opacity: 0; }
+.splash-sweat path { fill: #7cc4ff; }
+.splash-sweat { opacity: 0; }
+.splash-dust circle { fill: #c9b28a; }
+.splash-dust { opacity: 0; }
+
+/* Forklift */
+.splash-wheel { fill: #23272e; }
+.splash-hub { fill: #7c8390; }
+.splash-body { fill: var(--amber); stroke: #a86e18; stroke-width: 2; }
+.splash-frame { fill: #7a5210; }
+.splash-post { stroke: #7a5210; stroke-width: 4; stroke-linecap: round; }
+.splash-seat { fill: #3a2a0e; }
+.splash-light { fill: #ffe08a; }
+.splash-mast { fill: #3a3f47; }
+.splash-carriage { fill: #2a2e35; }
+.splash-fork { fill: #c4c9d0; stroke: #8a9099; stroke-width: 1; }
+
+/* Motion */
+.splash-forklift { transform: translateX(60px); animation: splash-drive 6s ease-in-out infinite; }
+.splash-clippy { transform-box: fill-box; transform-origin: 50% 100%; animation: splash-squish 6s ease-in-out infinite; }
+.splash-eyes-alive { animation: splash-eyes-alive 6s ease-in-out infinite; }
+.splash-eyes-dead { animation: splash-eyes-dead 6s ease-in-out infinite; }
+.splash-dust { transform-box: fill-box; transform-origin: 50% 100%; animation: splash-dust 6s ease-out infinite; }
+.splash-sweat { animation: splash-sweat 6s ease-in-out infinite; }
+
+@keyframes splash-drive {
+  0%   { transform: translateX(-200px); }
+  40%  { transform: translateX(122px); }
+  50%  { transform: translateX(133px); }
+  66%  { transform: translateX(133px); }
+  100% { transform: translateX(-200px); }
+}
+@keyframes splash-squish {
+  0%, 40%  { transform: scaleY(1) scaleX(1); }
+  50%      { transform: scaleY(0.12) scaleX(1.28); }
+  86%      { transform: scaleY(0.12) scaleX(1.28); }
+  94%      { transform: scaleY(1.12) scaleX(0.94); }
+  100%     { transform: scaleY(1) scaleX(1); }
+}
+@keyframes splash-eyes-alive {
+  0%, 44%  { opacity: 1; }
+  47%, 92% { opacity: 0; }
+  96%, 100% { opacity: 1; }
+}
+@keyframes splash-eyes-dead {
+  0%, 44%  { opacity: 0; }
+  47%, 92% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+@keyframes splash-dust {
+  0%, 44%  { opacity: 0; transform: scale(0.3); }
+  50%      { opacity: 0.85; transform: scale(1); }
+  64%      { opacity: 0; transform: scale(1.7); }
+  100%     { opacity: 0; }
+}
+@keyframes splash-sweat {
+  0%, 28%  { opacity: 0; }
+  34%, 44% { opacity: 1; }
+  48%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-forklift, .splash-clippy, .splash-eyes-alive, .splash-eyes-dead, .splash-dust, .splash-sweat { animation: none !important; }
+  .splash-forklift { transform: translateX(40px); }
+}
 .welcome-card h1 { text-align: center; margin: 8px 0 2px; font-size: 22px; }
 .welcome-card .tag { text-align: center; color: var(--text-dim); margin-bottom: 22px; }
 .recent-item {
