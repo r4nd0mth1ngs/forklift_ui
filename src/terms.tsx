@@ -26,15 +26,15 @@ export type TermDef = Record<PresetId, string>;
 export const TERMS = {
   // Nouns — singular
   warehouse: { forklift: "Warehouse", git: "Repository", melo: "Műhely", brainrot: "Rizzpository" },
-  parcel: { forklift: "Parcel", git: "Commit", melo: "Papír", brainrot: "Cook" },
-  pallet: { forklift: "Pallet", git: "Branch", melo: "Ág", brainrot: "Timeline" },
+  parcel: { forklift: "Parcel", git: "Commit", melo: "Papír", brainrot: "Canon Event" },
+  pallet: { forklift: "Pallet", git: "Branch", melo: "Ág", brainrot: "Arc" },
   haul: { forklift: "Haul", git: "Pull request", melo: "Behegesztés", brainrot: "Collab" },
   tag: { forklift: "Tag", git: "Tag", melo: "Pecsét", brainrot: "Drop" },
   bay: { forklift: "Bay", git: "Worktree", melo: "Bódé", brainrot: "Side Quest" },
-  inventory: { forklift: "Inventory", git: "Index", melo: "Raktárlista", brainrot: "The Lineup" },
+  inventory: { forklift: "Inventory", git: "Index", melo: "Raktárlista", brainrot: "On Deck" },
 
   // Nouns — plural / section & tab labels
-  pallets: { forklift: "Pallets", git: "Branches", melo: "Ágak", brainrot: "Timelines" },
+  pallets: { forklift: "Pallets", git: "Branches", melo: "Ágak", brainrot: "Arcs" },
   hauls: { forklift: "Hauls", git: "Pull requests", melo: "Behegesztések", brainrot: "Collabs" },
   tags: { forklift: "Tags", git: "Tags", melo: "Pecsétek", brainrot: "Drops" },
   bays: { forklift: "Bays", git: "Worktrees", melo: "Bódék", brainrot: "Side Quests" },
@@ -48,15 +48,15 @@ export const TERMS = {
 
   // Verbs / actions
   stack: { forklift: "Stack", git: "Commit", melo: "Papíroz", brainrot: "Lock In" },
-  load: { forklift: "Load", git: "Stage", melo: "Rádob", brainrot: "Rack Up" },
+  load: { forklift: "Load", git: "Stage", melo: "Rádob", brainrot: "Cook Up" },
   unload: { forklift: "Unload", git: "Remove", melo: "Leszed", brainrot: "Yeet" },
   restore: { forklift: "Restore", git: "Restore", melo: "Visszabütyköl", brainrot: "Rewind" },
-  discard: { forklift: "Discard", git: "Discard", melo: "Kukáz", brainrot: "Nuke It" },
+  discard: { forklift: "Discard", git: "Discard", melo: "Kukáz", brainrot: "Delete This" },
   consolidate: { forklift: "Consolidate", git: "Merge", melo: "Hegeszt", brainrot: "Link Up" },
   cherryPick: { forklift: "Cherry-pick", git: "Cherry-pick", melo: "Kiszemez", brainrot: "Snipe" },
   deliver: { forklift: "Deliver", git: "Squash-merge", melo: "Összetapos", brainrot: "Ship It" },
   shift: { forklift: "Shift", git: "Checkout", melo: "Átáll", brainrot: "Switch Up" },
-  lift: { forklift: "Lift", git: "Push", melo: "Feltol", brainrot: "Send Up" },
+  lift: { forklift: "Lift", git: "Push", melo: "Feltol", brainrot: "Send It" },
   lower: { forklift: "Lower", git: "Pull", melo: "Lehúz", brainrot: "Pull Up" },
   franchise: { forklift: "Franchise", git: "Clone", melo: "Másol", brainrot: "Copypasta" },
   park: { forklift: "Park", git: "Stash", melo: "Dugdos", brainrot: "Bench It" },
