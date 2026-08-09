@@ -423,6 +423,39 @@ downloading { curl progress } to /home/x/.local/bin\n\
         assert_eq!(entries.len(), 1);
     }
 
+    /// forklift 0.2 split staging a deletion (`remove`) out of `unload`, which now only
+    /// unstages. The GUI stages a vanished file for the user, so if it ever reaches for
+    /// `unload` again the deletion silently never gets staged — this pins both halves.
+    #[test]
+    fn remove_stages_a_deletion_and_unload_only_unstages() {
+        if !binary_available() {
+            eprintln!("skipping: no forklift binary found");
+            return;
+        }
+        let wh = TempWarehouse::new("remove");
+        run_json(None, Some(wh.path()), vec!["prepare".into()], None).unwrap();
+        std::fs::write(self_path(&wh, "gone.txt"), "bye\n").unwrap();
+        run_json(None, Some(wh.path()), vec!["load".into(), ".".into()], None).unwrap();
+        run_json(None, Some(wh.path()), vec!["stack".into(), "c".into()], None).unwrap();
+
+        // Delete it on disk, then stage the deletion the way the Changes panel does.
+        std::fs::remove_file(self_path(&wh, "gone.txt")).unwrap();
+        run_json(None, Some(wh.path()), vec!["remove".into(), "gone.txt".into()], None)
+            .expect("remove should stage the deletion");
+        let staged = run_json(None, Some(wh.path()), vec!["stocktake".into()], None).unwrap();
+        assert_eq!(
+            staged.get("staged_count").and_then(Value::as_u64),
+            Some(1),
+            "remove must stage the deletion, not no-op"
+        );
+
+        // unload is the inverse of load — it puts the path back to the head, unstaged.
+        run_json(None, Some(wh.path()), vec!["unload".into(), "gone.txt".into()], None)
+            .expect("unload should unstage");
+        let after = run_json(None, Some(wh.path()), vec!["stocktake".into()], None).unwrap();
+        assert_eq!(after.get("staged_count").and_then(Value::as_u64), Some(0), "unload must unstage");
+    }
+
     #[test]
     fn classifies_not_a_warehouse() {
         if !binary_available() {

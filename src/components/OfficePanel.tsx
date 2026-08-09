@@ -129,12 +129,14 @@ function AuditRow() {
   const [detail, setDetail] = useState("");
   const t = useT();
 
-  const audit = async () => {
+  const audit = async (full = false) => {
     setState("running");
     try {
-      await fk.audit(wh);
+      await fk.audit(wh, undefined, full);
       setState("ok");
-      setDetail("Signed history verified against the office chain.");
+      setDetail(full
+        ? "Signed history verified, and every stored chunk re-read and re-hashed."
+        : "Signed history verified against the office chain.");
       notify("ok", "Audit passed");
     } catch (e) {
       const fe = asError(e);
@@ -146,8 +148,18 @@ function AuditRow() {
 
   return (
     <div style={{ padding: 16, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
-      <button className="btn" onClick={audit} disabled={state === "running"}>
+      <button className="btn" onClick={() => audit()} disabled={state === "running"}>
         {state === "running" ? "Auditing…" : `Verify signed history (${t("audit").toLowerCase()})`}
+      </button>
+      {/* A normal audit only presence-checks a large file's chunks. --full re-reads and re-hashes
+          every one — the recommended periodic scrub for on-disk bit-rot a push no longer catches. */}
+      <button
+        className="btn ghost"
+        onClick={() => audit(true)}
+        disabled={state === "running"}
+        title="Also re-read every chunk and re-verify each large file's content hash. Slower — run it periodically as a bit-rot scrub."
+      >
+        Full
       </button>
       {state === "ok" && <span style={{ color: "var(--green)" }}>✓ {detail}</span>}
       {state === "fail" && <span style={{ color: "var(--red)" }}>✗ {detail}</span>}

@@ -49,7 +49,9 @@ export const TERMS = {
   // Verbs / actions
   stack: { forklift: "Stack", git: "Commit", melo: "Papíroz", brainrot: "Lock In" },
   load: { forklift: "Load", git: "Stage", melo: "Rádob", brainrot: "Cook" },
-  unload: { forklift: "Unload", git: "Remove", melo: "Leszed", brainrot: "Yeet" },
+  // forklift 0.2 split these: `unload` only unstages now, `remove` stages a deletion.
+  unload: { forklift: "Unload", git: "Unstage", melo: "Leszed", brainrot: "Uncook" },
+  remove: { forklift: "Remove", git: "Remove", melo: "Kihajít", brainrot: "Yeet" },
   restore: { forklift: "Restore", git: "Restore", melo: "Visszabütyköl", brainrot: "Rewind" },
   discard: { forklift: "Discard", git: "Discard", melo: "Kukáz", brainrot: "Send to Ohio" },
   consolidate: { forklift: "Consolidate", git: "Merge", melo: "Hegeszt", brainrot: "Merge the Lore" },

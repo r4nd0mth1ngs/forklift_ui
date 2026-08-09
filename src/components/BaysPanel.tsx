@@ -40,10 +40,13 @@ export function BaysPanel() {
               <div key={bay.name} className="list-row">
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div className="lead">{bay.name}</div>
-                  {(bay.path || bay.pallet) && (
+                  {(bay.path || bay.pallet || bay.scope?.length) && (
                     <div className="sub" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
                       {bay.path && <span className="parcel-hash">{bay.path}</span>}
                       {bay.pallet && <span>on {bay.pallet}</span>}
+                      {bay.scope?.map((prefix) => (
+                        <span key={prefix} className="pill" title="This bay materializes only the scoped subtrees">{prefix}</span>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -69,12 +72,14 @@ function AddBayForm({ onClose }: { onClose: () => void }) {
   const { wh, run } = useApp();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
+  const [scope, setScope] = useState("");
   const [busy, setBusy] = useState(false);
 
   const add = async () => {
     if (!name.trim()) return;
     setBusy(true);
-    const ok = await run(fk.bayAdd(wh, name.trim(), path.trim() || undefined), "Bay opened");
+    const prefixes = scope.split(/[\s,]+/).filter(Boolean);
+    const ok = await run(fk.bayAdd(wh, name.trim(), path.trim() || undefined, prefixes), "Bay opened");
     setBusy(false);
     if (ok) onClose();
   };
@@ -89,6 +94,12 @@ function AddBayForm({ onClose }: { onClose: () => void }) {
       </Field>
       <Field label="Path (optional, default: a sibling of the warehouse)">
         <input className="text-input" value={path} onChange={(e) => setPath(e.target.value)} />
+      </Field>
+      <Field
+        label="Scope (optional) — materialize only these subtrees"
+        hint="Space- or comma-separated. A scoped bay checks out just the named subtrees; everything else stays sealed by the hash the signed head already commits, so what you stack is byte-identical to a full workspace's."
+      >
+        <input className="text-input" value={scope} onChange={(e) => setScope(e.target.value)} placeholder="src/api docs" />
       </Field>
       <div className="actions">
         <button className="btn ghost" onClick={onClose}>Cancel</button>

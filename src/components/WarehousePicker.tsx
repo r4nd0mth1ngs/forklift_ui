@@ -245,6 +245,7 @@ function FranchiseForm({ onCancel, onCloned }: { onCancel: () => void; onCloned:
   const [directory, setDirectory] = useState("");
   const [pallet, setPallet] = useState("");
   const [token, setToken] = useState("");
+  const [only, setOnly] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const t = useT();
@@ -259,7 +260,11 @@ function FranchiseForm({ onCancel, onCloned }: { onCancel: () => void; onCloned:
     setBusy(true);
     setMessage("Franchising…");
     try {
-      await fk.franchise(directory.trim(), url.trim(), { pallet: pallet.trim() || undefined, token: token.trim() || undefined });
+      await fk.franchise(directory.trim(), url.trim(), {
+        pallet: pallet.trim() || undefined,
+        token: token.trim() || undefined,
+        only: only.split(/[\s,]+/).filter(Boolean),
+      });
       onCloned(directory.trim());
     } catch (error) {
       setMessage(asError(error).message);
@@ -292,6 +297,14 @@ function FranchiseForm({ onCancel, onCloned }: { onCancel: () => void; onCloned:
         <div className="field">
           <label>Bearer token (optional)</label>
           <input className="text-input" type="password" value={token} onChange={(e) => setToken(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Only these subtrees (optional — a sparse clone)</label>
+          <input className="text-input" value={only} onChange={(e) => setOnly(e.target.value)} placeholder="src/api docs" />
+          <div className="hint">
+            Fetches the whole signed history but only these subtrees' content — the rest stays pinned by
+            hash and can be pulled later with Expand. A sparse clone can only lift back to this origin.
+          </div>
         </div>
         {message && <div className="hint" style={{ color: busy ? "var(--text-dim)" : "var(--red)" }}>{message}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>

@@ -3,7 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ForkliftError, isForkliftError, OfficeState } from "./api";
+import { fk, ForkliftError, isForkliftError, OfficeState } from "./api";
 
 // ---- App context ------------------------------------------------------------
 
@@ -134,6 +134,32 @@ export function ErrorBanner({ error }: { error: ForkliftError }) {
       <div className="code">{error.code}</div>
       <div>{error.message}</div>
       {error.next_step && <div className="next">→ {error.next_step}</div>}
+      {error.code === "durability_taint" && <HealAction />}
+    </div>
+  );
+}
+
+/**
+ * A durability taint makes *every* command refuse until it is resolved, so the offer to run
+ * `heal` lives here — on the one banner every panel already renders — rather than in each of
+ * them. `heal` and the read-only `audit` are the only commands that run while one stands.
+ */
+function HealAction() {
+  const { wh, run } = useApp();
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="next">
+      <button
+        className="btn sm"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await run(fk.heal(wh), "Taint healed");
+          setBusy(false);
+        }}
+      >
+        {busy ? "Healing…" : "Run heal"}
+      </button>
     </div>
   );
 }

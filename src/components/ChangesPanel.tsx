@@ -1,4 +1,4 @@
-// The core commit workflow: staged / unstaged lists (load / unload / restore), an inline
+// The core commit workflow: staged / unstaged lists (load / remove / restore), an inline
 // diff of the selected file, and the commit (stack) box.
 
 import { useEffect, useState } from "react";
@@ -36,7 +36,9 @@ export function ChangesPanel() {
   if (error) return <div style={{ padding: 12 }}><ErrorBanner error={error} /></div>;
 
   const stageAll = () => run(Promise.all(unstaged.map((c) => stageOne(c))), "Loaded all changes");
-  const stageOne = (c: Change) => (c.kind === "deleted" ? fk.unload(wh, c.path) : fk.load(wh, c.path));
+  // A vanished file is staged with `remove`. Before forklift 0.2 that was `unload`'s job;
+  // `unload` now means plain unstage, so using it here would silently do nothing.
+  const stageOne = (c: Change) => (c.kind === "deleted" ? fk.remove(wh, c.path) : fk.load(wh, c.path));
 
   const commit = async () => {
     if (!message.trim()) return;
@@ -50,12 +52,17 @@ export function ChangesPanel() {
     <div className="changes-layout">
       <div className="changes-list">
         <div className="changes-scroll">
+          {data?.consolidation_in_progress && (
+            <div className="hint" style={{ padding: "8px 14px", color: "var(--amber)" }}>
+              A consolidation is staged but not stacked yet — stack it to record the merge.
+            </div>
+          )}
           <Group
             title="Staged"
             count={staged.length}
             action={
               staged.length > 0 && (
-                <button className="btn ghost sm" onClick={() => run(Promise.all(staged.map((c) => fk.restore(wh, c.path, true))), "Unstaged all")}>
+                <button className="btn ghost sm" onClick={() => run(Promise.all(staged.map((c) => fk.unload(wh, c.path))), "Unstaged all")}>
                   Unstage all
                 </button>
               )
@@ -67,7 +74,7 @@ export function ChangesPanel() {
                 change={c}
                 selected={selected?.staged === true && selected.path === c.path}
                 onSelect={() => setSelected({ path: c.path, staged: true })}
-                actions={[{ label: "Unstage", onClick: () => run(fk.restore(wh, c.path, true)) }]}
+                actions={[{ label: "Unstage", onClick: () => run(fk.unload(wh, c.path)) }]}
               />
             ))}
             {staged.length === 0 && <Hint text="Nothing staged yet." />}

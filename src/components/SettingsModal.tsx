@@ -5,13 +5,14 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
-  BinaryInfo, CompactResult, ConfigList, detectBinary, fk, getBinOverride, installForklift, ProfileList, SelfUpdate, setBinOverride, StoreHealth,
+  BinaryInfo, CompactResult, ConfigList, detectBinary, fk, getBinOverride, installForklift, PackProblem, ProfileList,
+  ScopeStatus, SelfUpdate, setBinOverride, Shown, StoreHealth,
 } from "../api";
-import { asError, useLoad } from "../common";
+import { asError, shortHash, useLoad } from "../common";
 import { Modal, Field } from "./Modal";
 import { TERMS, TermKey, useTerms, VOCABULARIES } from "../terms";
 
-type Tab = "terms" | "binary" | "config" | "profiles" | "git" | "store" | "inspect" | "updates";
+type Tab = "terms" | "binary" | "config" | "profiles" | "git" | "store" | "scope" | "inspect" | "updates";
 
 export function SettingsModal(props: { wh?: string; binVersion?: string; onClose: () => void; onDetected: (info: BinaryInfo) => void }) {
   const [tab, setTab] = useState<Tab>("terms");
@@ -24,6 +25,7 @@ export function SettingsModal(props: { wh?: string; binVersion?: string; onClose
     { key: "profiles", label: "Profiles", needsWh: true },
     { key: "git", label: "Git", needsWh: true },
     { key: "store", label: "Store", needsWh: true },
+    { key: "scope", label: "Scope", needsWh: true },
     { key: "inspect", label: "Inspect", needsWh: true },
     { key: "updates", label: "Updates" },
   ];
@@ -43,6 +45,7 @@ export function SettingsModal(props: { wh?: string; binVersion?: string; onClose
         {tab === "profiles" && wh && <ProfilesTab wh={wh} />}
         {tab === "git" && wh && <GitTab wh={wh} />}
         {tab === "store" && wh && <StoreTab wh={wh} />}
+        {tab === "scope" && wh && <ScopeTab wh={wh} />}
         {tab === "inspect" && wh && <InspectTab wh={wh} />}
         {tab === "updates" && <UpdatesTab binVersion={props.binVersion} onDetected={props.onDetected} />}
       </div>
@@ -165,6 +168,20 @@ function BinaryTab({ onDetected }: { onDetected: (info: BinaryInfo) => void }) {
 
 // ---- Config -----------------------------------------------------------------
 
+/** The documented configuration reference (docs/guide/cli.md §9), for autocomplete only. */
+const CONFIG_KEYS: [string, string][] = [
+  ["operator.name", "Your display name (local only)"],
+  ["operator.identifier", "Your on-chain operator id"],
+  ["operator.profile", "The named profile this warehouse acts under"],
+  ["remote.url", "The remote warehouse URL — may be a .onion"],
+  ["remote.token", "Bearer token, when the remote requires one"],
+  ["remote.tor", "Route over Tor: auto (only .onion) | on | off"],
+  ["remote.torProxy", "Tor SOCKS proxy (default socks5h://127.0.0.1:9050)"],
+  ["maintenance.auto", "Auto-compact after mutating commands"],
+  ["maintenance.loose", "Loose-object count that triggers a compact"],
+  ["maintenance.packs", "Pack count that triggers a repack"],
+];
+
 function ConfigTab({ wh }: { wh: string }) {
   const [reload, setReload] = useState(0);
   const { data, error } = useLoad<ConfigList>(() => fk.configList(wh), [wh, reload]);
@@ -205,7 +222,13 @@ function ConfigTab({ wh }: { wh: string }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <Field label="Key"><input className="text-input" value={key} onChange={(e) => setKey(e.target.value)} placeholder="operator.name" /></Field>
+        <Field label="Key">
+          <input className="text-input" list="fk-config-keys" value={key} onChange={(e) => setKey(e.target.value)} placeholder="operator.name" />
+          {/* The setter is generic on purpose; this is only discoverability for the documented keys. */}
+          <datalist id="fk-config-keys">
+            {CONFIG_KEYS.map(([k, hint]) => <option key={k} value={k} label={hint} />)}
+          </datalist>
+        </Field>
         <Field label="Value"><input className="text-input" value={value} onChange={(e) => setValue(e.target.value)} /></Field>
         <label className="check" style={{ paddingBottom: 8 }}><input type="checkbox" checked={global} onChange={(e) => setGlobal(e.target.checked)} /> global</label>
         <button className="btn primary" style={{ marginBottom: 0 }} disabled={!key.trim()} onClick={set}>Set</button>
@@ -297,7 +320,13 @@ function GitTab({ wh }: { wh: string }) {
   );
 }
 
-// ---- Inspect (peek) ---------------------------------------------------------
+// ---- Inspect (peek by hash, show by revision:path) --------------------------
+
+const OUTPUT_BOX: React.CSSProperties = {
+  whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--mono)", fontSize: 12,
+  background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12,
+  userSelect: "text", maxHeight: 300, overflow: "auto",
+};
 
 function InspectTab({ wh }: { wh: string }) {
   const [hash, setHash] = useState("");
@@ -314,12 +343,49 @@ function InspectTab({ wh }: { wh: string }) {
       </Field>
       {loading && submitted && <div className="hint">Reading…</div>}
       {error && <Status text={error.message} ok={false} />}
-      {data && (
-        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, userSelect: "text", maxHeight: 300, overflow: "auto" }}>
-          {data}
-        </pre>
-      )}
+      {data && <pre style={OUTPUT_BOX}>{data}</pre>}
+      <ShowFile wh={wh} />
     </>
+  );
+}
+
+/** `show <revision>:<path>` — a file's content at a revision, without resolving trees by hand. */
+function ShowFile({ wh }: { wh: string }) {
+  const [revision, setRevision] = useState("main");
+  const [path, setPath] = useState("");
+  const [asked, setAsked] = useState<{ revision: string; path: string } | null>(null);
+  const { data, error, loading } = useLoad<Shown | null>(
+    () => (asked ? fk.show(wh, asked.revision, asked.path) : Promise.resolve(null)),
+    [wh, asked],
+  );
+
+  return (
+    <div style={{ marginTop: 18, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+      <Field label="Show a file at a revision" hint="A pallet name, an @meta pallet, or a parcel hash prefix — plus the path.">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input className="text-input" style={{ flex: "0 0 150px" }} value={revision} onChange={(e) => setRevision(e.target.value)} placeholder="main" />
+          <input className="text-input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="src/app.rs" />
+          <button className="btn" disabled={!revision.trim() || !path.trim()} onClick={() => setAsked({ revision: revision.trim(), path: path.trim() })}>Show</button>
+        </div>
+      </Field>
+      {loading && asked && <div className="hint">Reading…</div>}
+      {error && <Status text={error.message} ok={false} />}
+      {data && (
+        <>
+          <div className="hint" style={{ marginBottom: 6 }}>
+            {shortHash(data.revision)} · {fmtBytes(data.size)}
+            {data.chunk_count != null && ` · chunked into ${data.chunk_count} pieces`}
+          </div>
+          {/* A binary or chunked file has no `content` — forklift reports metadata rather than
+              assembling gigabytes or mangling raw bytes through a lossy text conversion. */}
+          <pre style={OUTPUT_BOX}>
+            {data.binary
+              ? `(${data.chunk_count != null ? "large chunked file" : "binary contents"}; not shown)`
+              : data.content}
+          </pre>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -337,14 +403,23 @@ function StoreTab({ wh }: { wh: string }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const compact = async (all: boolean) => {
+  const compact = async (all: boolean, redelta = false) => {
     setBusy(true);
-    setStatus(all ? "Repacking…" : "Compacting…");
+    setStatus(redelta ? "Re-deltaing the whole store…" : all ? "Repacking…" : "Compacting…");
     try {
-      const r: CompactResult = await fk.compact(wh, all);
-      setStatus(r.objects_packed > 0
-        ? `Packed ${r.objects_packed} object${r.objects_packed === 1 ? "" : "s"} into ${r.packs_written} pack${r.packs_written === 1 ? "" : "s"} (${r.deltas} deltas).`
-        : "Nothing to compact — the store is already packed.");
+      const r: CompactResult = await fk.compact(wh, all, redelta);
+      // A skipped object is left in place and stays readable, but is worth saying out loud:
+      // corrupt ones warrant an audit, over-ceiling ones simply predate the 64 MiB limit.
+      const skipped = [
+        r.corrupt_skipped ? `${r.corrupt_skipped} corrupt (run an audit)` : "",
+        r.over_ceiling_skipped ? `${r.over_ceiling_skipped} over the size ceiling` : "",
+      ].filter(Boolean);
+      setStatus([
+        r.objects_packed > 0
+          ? `Packed ${r.objects_packed} object${r.objects_packed === 1 ? "" : "s"} into ${r.packs_written} pack${r.packs_written === 1 ? "" : "s"} (${r.deltas} deltas).`
+          : "Nothing to compact — the store is already packed.",
+        skipped.length ? `Skipped and left loose: ${skipped.join(", ")}.` : "",
+      ].filter(Boolean).join(" "));
       setReload((n) => n + 1);
     } catch (e) {
       setStatus(asError(e).message);
@@ -389,20 +464,53 @@ function StoreTab({ wh }: { wh: string }) {
         <StoreStat label="Delta-compressed" value={`${data.deltas}`} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <PackProblems title="Quarantined packs" note="Their objects are not lost — heal can refetch them from a remote." problems={data.quarantined_packs} />
+      <PackProblems title="Unenumerable pack indexes" note="The index itself will not parse — move the file aside and re-run." problems={data.unenumerable_indexes} />
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn primary" disabled={busy || data.loose_objects === 0} onClick={() => compact(false)}>
           {busy ? "Working…" : "Compact"}
         </button>
         <button className="btn" disabled={busy} onClick={() => compact(true)} title="Full repack: also drop unreachable objects and consolidate existing packs">
           Full repack
         </button>
+        <button
+          className={`btn ${data.densify_suggested ? "primary" : ""}`}
+          disabled={busy}
+          onClick={() => compact(true, true)}
+          title="Full repack that also re-runs delta selection across the whole live store. One-shot and CPU-bound — not something to run routinely."
+        >
+          Re-delta
+        </button>
         <button className="btn ghost sm" disabled={busy} onClick={() => setReload((n) => n + 1)}>Refresh</button>
       </div>
       <div className="hint" style={{ marginTop: 6 }}>
         Compact packs loose objects into dense pack files. {data.maintenance.auto ? "Auto-maintenance is on, so this usually happens on its own." : "Auto-maintenance is off."}
       </div>
+      {data.densify_suggested && (
+        <div className="hint" style={{ marginTop: 4, color: "var(--amber)" }}>
+          This store was bulk-ingested (an import or a franchised bundle), so its packs were only ever
+          deltaed one path at a time. A one-shot <strong>Re-delta</strong> can shrink it further.
+        </div>
+      )}
       <Status text={status} />
     </>
+  );
+}
+
+/** Pack indexes the census could not use. Both lists are empty on a healthy store. */
+function PackProblems({ title, note, problems }: { title: string; note: string; problems?: PackProblem[] }) {
+  if (!problems || problems.length === 0) return null;
+  return (
+    <div style={{ margin: "0 0 12px" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--red)" }}>{title} ({problems.length})</div>
+      {problems.map((p) => (
+        <div key={p.index_path} style={{ fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--text-dim)" }}>
+          {p.index_path} — {p.error}
+        </div>
+      ))}
+      <div className="hint">{note}</div>
+    </div>
   );
 }
 
@@ -411,6 +519,95 @@ function StoreStat({ label, value }: { label: string; value: string }) {
     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 3 }}>
       <span style={{ color: "var(--text-dim)" }}>{label}</span>
       <span style={{ fontFamily: "var(--mono)" }}>{value}</span>
+    </div>
+  );
+}
+
+// ---- Scope (sparse workspaces) ----------------------------------------------
+
+/**
+ * Two different scopes, deliberately kept apart in the UI because they are easy to confuse:
+ * the *fetch* scope is warehouse-wide (what content was downloaded at all — widened by
+ * `expand`, given up by the destructive `scope-prune`), while the *materialization* scope is
+ * this checkout's alone (what shows up on disk — shrunk by `narrow`, set by `bay add --scope`).
+ */
+function ScopeTab({ wh }: { wh: string }) {
+  const [reload, setReload] = useState(0);
+  const { data, error, loading } = useLoad<ScopeStatus>(() => fk.scope(wh), [wh, reload]);
+  const [paths, setPaths] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const act = async (label: string, action: (list: string[]) => Promise<unknown>) => {
+    const list = paths.split(/[\s,]+/).filter(Boolean);
+    if (list.length === 0) return;
+    setBusy(true);
+    setStatus(`${label}…`);
+    try {
+      await action(list);
+      setStatus(`${label} — done.`);
+      setPaths("");
+      setReload((n) => n + 1);
+    } catch (e) {
+      setStatus(asError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading && !data) return <div className="hint">Reading the scope…</div>;
+  if (error) return <Status text={error.message} ok={false} />;
+  if (!data) return null;
+
+  return (
+    <>
+      <ScopeList
+        label="This checkout materializes"
+        paths={data.materialization_scope}
+        full="the full tree"
+        note={data.bay ? `Bay "${data.bay}".` : "The main tree."}
+      />
+      <ScopeList
+        label="This warehouse has fetched"
+        paths={data.fetch_scope}
+        full="everything"
+        note="A sparse franchise records the subtrees whose content it downloaded; the rest stays sealed by hash."
+      />
+
+      <Field label="Subtree path(s)" hint="Space- or comma-separated.">
+        <input className="text-input" value={paths} onChange={(e) => setPaths(e.target.value)} placeholder="src/api docs" />
+      </Field>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn primary" disabled={busy || !paths.trim()} onClick={() => act("Expanded", (l) => fk.expand(wh, l))} title="Fetch a subtree's content from the remote across the whole history">
+          Expand
+        </button>
+        <button className="btn" disabled={busy || !paths.trim()} onClick={() => act("Narrowed", (l) => fk.narrow(wh, l))} title="Stop materializing a subtree here. Frees nothing in the shared object store.">
+          Narrow
+        </button>
+        <button className="btn" disabled={busy || !paths.trim()} onClick={() => act("Dry run", (l) => fk.scopePrune(wh, l, true))} title="Show what a prune would free, changing nothing">
+          Prune (dry run)
+        </button>
+        <button className="btn danger" disabled={busy || !paths.trim()} onClick={() => act("Pruned", (l) => fk.scopePrune(wh, l))} title="Destructive: forget the path warehouse-wide and delete its objects. Re-fetchable from the origin with Expand.">
+          Prune
+        </button>
+      </div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        Expand widens what the <em>warehouse</em> fetched; Narrow shrinks what <em>this checkout</em> shows.
+        Prune is the destructive one — it deletes the content, and refuses while any checkout still materializes the path.
+      </div>
+      <Status text={status} />
+    </>
+  );
+}
+
+function ScopeList({ label, paths, full, note }: { label: string; paths: string[]; full: string; note: string }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{label}</div>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 12.5 }}>
+        {paths.length === 0 ? full : paths.join("  ·  ")}
+      </div>
+      <div className="hint">{note}</div>
     </div>
   );
 }

@@ -2,10 +2,10 @@
 // signed identity: history doesn't inline the identity class, so — like forklift's own
 // blame — we join each parcel's operator id against the office registry to show whether
 // the author is a human / agent / bot / service and their role. Selecting a parcel shows
-// its diff against its first parent (the previous entry in this first-parent log).
+// its diff against its first parent, which the parcel itself now reports.
 
 import { useState } from "react";
-import { fk, History, HistoryEntry, OfficeState, ParcelAction } from "../api";
+import { EMPTY_REV, fk, History, HistoryEntry, OfficeState, ParcelAction } from "../api";
 import { useApp, useLoad, Loading, Empty, ErrorBanner, IdentityBadge, shortHash, relTime, buildIdentityMap, IdentityMap } from "../common";
 import { useT } from "../terms";
 import { DiffView } from "./DiffView";
@@ -26,8 +26,14 @@ export function HistoryPanel({ revision }: { revision?: string }) {
   }
 
   const sel = selected != null ? entries[selected] : null;
-  // First-parent of the selected parcel = the next entry in this first-parent-ordered log.
-  const parent = selected != null ? entries[selected + 1]?.parcel : undefined;
+  // forklift 0.2+ reports each parcel's real parents, so the diff base is exact rather than
+  // inferred. Older binaries omit the field — then fall back to the next entry in this
+  // first-parent-ordered log, which is the first parent in all but truncated walks.
+  const parent = sel?.parents
+    ? sel.parents[0] ?? EMPTY_REV // a root parcel diffs against the empty tree: all files "added"
+    : selected != null
+      ? entries[selected + 1]?.parcel
+      : undefined;
 
   return (
     <div className="changes-layout">
@@ -111,6 +117,7 @@ function ParcelRow({
           <span>{stackedBy}</span>
           <IdentityBadge cls={identity?.class} />
           {identity?.role === "admin" && <span className="pill">admin</span>}
+          {(entry.parents?.length ?? 0) > 1 && <span className="pill" title={entry.parents!.join(" + ")}>merge</span>}
           {authoredBy !== stackedBy && <span title="original author">✎ {authoredBy}</span>}
           {when && <span>· {relTime(when)}</span>}
           <span className="parcel-hash">{shortHash(entry.parcel)}</span>

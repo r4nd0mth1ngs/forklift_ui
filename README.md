@@ -96,19 +96,20 @@ probes every known location — a sibling `../forklift/target/release` dev build
 
 | Area | Forklift commands | Notes |
 |------|-------------------|-------|
-| **Changes** | `stocktake`, `load`, `unload`, `restore`, `stack`, `diff` | Stage/unstage, discard, inline line-level diff, commit box (⌘↵), parked (stash) list |
-| **History** | `history` + `office` | Parcel log with a graph rail and a per-parcel diff; identity badges (human / agent / bot / service) joined from the office; cherry-pick |
+| **Changes** | `stocktake`, `load`, `unload`, `remove`, `restore`, `stack`, `diff` | Stage/unstage, stage a deletion, discard, inline line-level diff, commit box (⌘↵), parked (stash) list, in-progress consolidation banner |
+| **History** | `history` + `office` | Parcel log with a graph rail and a per-parcel diff off its **real first parent** (a root parcel diffs against `:empty`); merge pills; identity badges (human / agent / bot / service) joined from the office; cherry-pick |
 | **Blame** | `blame` | Signed line attribution; browse-and-pick any file |
 | **Conflicts** | `conflicts`, `peek` | The three content-addressed sides of each conflict |
 | **Pallets** | `palletize`, `shift`, `consolidate`, `deliver` | Branch list, switch, create; per-pallet merge / deliver |
-| **Remote** | `lift`, `lower`, `franchise` | Push / pull; clone from a URL |
-| **Office** | `office` (all 11 subcommands), `audit` | Signed identities, roles, keys; enroll / admit / rotate / retire / …; offline audit |
+| **Remote** | `lift`, `lower`, `franchise` | Push / pull; clone from a URL, optionally **sparse** (`--only <subtree>`) |
+| **Office** | `office` (all 11 subcommands), `audit` | Signed identities, roles, keys; enroll / admit / rotate / retire / …; offline audit, plus **`--full`** (re-reads and re-hashes every chunk — the periodic bit-rot scrub) |
 | **Tags** | `tag` (create / show / list) | Signed release tags |
 | **Hauls** | `haul` (all 8 subcommands) | Pull requests: open, discuss, signed review, merge / close |
 | **Manifest** | `manifest` (note / approve / provenance / show) | Signed post-metadata incl. AI provenance |
-| **Bays** | `bay` (add / remove / list) | Worktrees |
+| **Bays** | `bay` (add / remove / list) | Worktrees, including **scoped (sparse) bays** — `bay add --scope <subtree>` materializes just that corner |
 | **Top bar** | `park`, `undo`, `lift`, `lower` | Stash, undo, push, pull |
-| **Settings** | `config`, `profile`, `import-git`, `export-git`, `store`, `compact`, `peek`, `self-update` | Config editor, profiles, git interop, **object-store health + compaction bar**, object inspect, updates with version cards |
+| **Anywhere** | `heal` | A `durability_taint` blocks every command, so the error banner offers a one-click heal wherever it surfaces |
+| **Settings** | `config`, `profile`, `import-git`, `export-git`, `store`, `compact`, `scope`, `expand`, `narrow`, `scope-prune`, `peek`, `show`, `self-update` | Config editor (autocompletes the documented keys, incl. `remote.tor` / `remote.torProxy`), profiles, git interop, **object-store health + compaction bar** with re-delta and pack-problem reporting, **Scope** tab for sparse workspaces, object inspect + show-a-file-at-a-revision, updates with version cards |
 
 **Signing without a terminal** — office/tag/manifest/haul operations sign, but a GUI has no TTY.
 A top-bar **🔒 lock** sets an in-memory passphrase, passed to forklift as

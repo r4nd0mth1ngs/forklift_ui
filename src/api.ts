@@ -91,6 +91,8 @@ export interface Stocktake {
   unstaged?: Change[];
   unstaged_count: number;
   summary: boolean;
+  /** A consolidation is staged but not yet stacked (0.2+). */
+  consolidation_in_progress?: boolean;
 }
 
 export interface DiffFiles {
@@ -112,7 +114,12 @@ export interface HistoryEntry {
   parcel: string;
   description: string | null;
   actions: ParcelAction[];
+  /** Every parent in canonical order, base-first for a consolidation; `[]` for a root (0.2+). */
+  parents?: string[];
 }
+
+/** The reserved revision meaning "the empty tree" — diff a root parcel against it. */
+export const EMPTY_REV = ":empty";
 
 export interface History {
   entries: HistoryEntry[];
@@ -240,10 +247,20 @@ export interface Bay {
   name: string;
   path?: string;
   pallet?: string;
+  /** A scoped (sparse) bay's in-scope prefixes; absent/empty means the full tree (0.3+). */
+  scope?: string[];
   [key: string]: unknown;
 }
 export interface Bays {
   bays: Bay[];
+}
+
+/** `scope` — this checkout's materialization scope + the warehouse's fetch scope (0.3+). */
+export interface ScopeStatus {
+  scoped: boolean;
+  bay?: string | null;
+  materialization_scope: string[];
+  fetch_scope: string[];
 }
 
 export interface ConfigEntry {
@@ -286,6 +303,11 @@ export interface StorePack {
   deltas: number;
   bytes: number;
 }
+/** A pack index the census could not use: quarantined (no data file) or unparseable (0.3+). */
+export interface PackProblem {
+  index_path: string;
+  error: string;
+}
 export interface StoreMaintenance {
   auto: boolean;
   compaction_due: boolean;
@@ -303,6 +325,12 @@ export interface StoreHealth {
   total_bytes: number;
   packs: StorePack[];
   maintenance: StoreMaintenance;
+  /** Bulk-ingested store that would still gain from a one-shot `compact --all --redelta` (0.3+). */
+  densify_suggested?: boolean;
+  /** Pack indexes whose data file could not be loaded — `heal` can refetch their objects (0.3+). */
+  quarantined_packs?: PackProblem[];
+  /** Pack indexes that could not even be parsed — move the file aside and re-run (0.3+). */
+  unenumerable_indexes?: PackProblem[];
 }
 export interface CompactResult {
   all: boolean;
@@ -311,6 +339,33 @@ export interface CompactResult {
   packs_written: number;
   deltas: number;
   bytes_packed: number;
+  /** Loose objects that did not decode or did not hash to their name — left in place (0.3+). */
+  corrupt_skipped?: number;
+  /** Loose objects over the 64 MiB ceiling — left loose and fully readable (0.3+). */
+  over_ceiling_skipped?: number;
+}
+
+/** `show` — a file's content at a revision; binary/chunked files report metadata instead (0.3+). */
+export interface Shown {
+  revision: string;
+  path: string;
+  hash: string;
+  binary: boolean;
+  size: number;
+  content?: string | null;
+  content_hash?: string | null;
+  chunk_count?: number | null;
+}
+
+/**
+ * `heal` — the outcome of resolving a standing durability taint (0.3+). Only `was_tainted` is
+ * always present: the CLI omits the list fields when they are empty, which is the common case.
+ */
+export interface HealReport {
+  was_tainted: boolean;
+  restaged?: string[];
+  resolved?: string[];
+  notes?: string[];
 }
 
 // ---- Typed command surface --------------------------------------------------
@@ -327,7 +382,10 @@ export const fk = {
   diffRevsText: (wh: string, a: string, b: string, path?: string) =>
     text(wh, ["diff", a, b, ...(path ? [path] : [])]),
   load: (wh: string, path: string) => json(wh, ["load", path]),
+  /** Unstage — resets the path to the pallet head, leaving the working file alone. */
   unload: (wh: string, path: string) => json(wh, ["unload", path]),
+  /** Stage a removal. Split out of `unload` in forklift 0.2 — `unload` now only unstages. */
+  remove: (wh: string, path: string) => json(wh, ["remove", path]),
   restore: (wh: string, path: string, staged = false) =>
     json(wh, staged ? ["restore", "--staged", path] : ["restore", path]),
 
@@ -354,6 +412,8 @@ export const fk = {
   conflicts: (wh: string) => json<Conflicts>(wh, ["conflicts"]),
   peek: (wh: string, hash: string) => text(wh, ["peek", hash]),
   peekInventory: (wh: string, path: string) => text(wh, ["peek", "--inventory", path]),
+  /** A file's content at a revision. The argument is `<revision>:<path>`, split on the first ":". */
+  show: (wh: string, revision: string, path: string) => json<Shown>(wh, ["show", `${revision}:${path}`]),
 
   // Park (stash)
   park: (wh: string) => json(wh, ["park"]),
@@ -375,8 +435,20 @@ export const fk = {
 
   // Bays (worktrees)
   bays: (wh: string) => json<Bays>(wh, ["bay"]),
-  bayAdd: (wh: string, name: string, path?: string) => json(wh, ["bay", "add", name, ...(path ? [path] : [])]),
+  /** `scope` prefixes make a *scoped* bay: it materializes only those subtrees (0.3+). */
+  bayAdd: (wh: string, name: string, path?: string, scope: string[] = []) =>
+    json(wh, ["bay", "add", name, ...(path ? [path] : []), ...scope.flatMap((p) => ["--scope", p])]),
   bayRemove: (wh: string, name: string) => json(wh, ["bay", "remove", name]),
+
+  // Sparse workspaces (0.3+): what this checkout materializes, and what the warehouse fetched.
+  scope: (wh: string) => json<ScopeStatus>(wh, ["scope"]),
+  /** Widen the *warehouse's* fetch scope — downloads the subtree's content from the remote. */
+  expand: (wh: string, paths: string[]) => json(wh, ["expand", ...paths]),
+  /** Shrink what *this checkout* materializes. Frees nothing in the shared object store. */
+  narrow: (wh: string, paths: string[]) => json(wh, ["narrow", ...paths]),
+  /** Destructive: forget a fetched path warehouse-wide and free its objects. Re-fetch with `expand`. */
+  scopePrune: (wh: string, paths: string[], dryRun = false) =>
+    json(wh, ["scope-prune", ...paths, ...(dryRun ? ["--dry-run"] : [])]),
 
   // Manifest (post-metadata: notes, approvals, AI provenance)
   manifestShow: (wh: string, revision: string) => json<ManifestShow>(wh, ["manifest", "show", revision]),
@@ -393,15 +465,25 @@ export const fk = {
     ]),
 
   // Git interop / clone / update (some need no warehouse)
-  franchise: (directory: string, url: string, o: { pallet?: string; token?: string }) =>
-    json<unknown>(undefined, ["franchise", url, directory, ...(o.pallet ? ["--pallet", o.pallet] : []), ...(o.token ? ["--token", o.token] : [])]),
+  /** `only` makes it a *sparse* franchise: full signed history, content for those subtrees only (0.3+). */
+  franchise: (directory: string, url: string, o: { pallet?: string; token?: string; only?: string[] }) =>
+    json<unknown>(undefined, [
+      "franchise", url, directory,
+      ...(o.pallet ? ["--pallet", o.pallet] : []),
+      ...(o.token ? ["--token", o.token] : []),
+      ...(o.only ?? []).flatMap((p) => ["--only", p]),
+    ]),
   importGit: (wh: string, path: string) => json(wh, ["import-git", path]),
   exportGit: (wh: string, path: string) => json(wh, ["export-git", path]),
   selfUpdate: (check: boolean) => json<SelfUpdate>(undefined, ["self-update", ...(check ? ["--check"] : [])]),
 
-  // Object store maintenance (v0.1.4+)
+  // Object store maintenance
   store: (wh: string) => json<StoreHealth>(wh, ["store"]),
-  compact: (wh: string, all = false) => json<CompactResult>(wh, ["compact", ...(all ? ["--all"] : [])]),
+  /** `redelta` re-runs delta selection across the whole live store; only valid with `all` (0.3+). */
+  compact: (wh: string, all = false, redelta = false) =>
+    json<CompactResult>(wh, ["compact", ...(all ? ["--all"] : []), ...(all && redelta ? ["--redelta"] : [])]),
+  /** Resolve a standing durability taint. One of only two commands that run while one stands (0.3+). */
+  heal: (wh: string) => json<HealReport>(wh, ["heal"]),
 
   // Remote
   lift: (wh: string) => json(wh, ["lift"]),
@@ -410,7 +492,9 @@ export const fk = {
 
   // Trust / office
   office: (wh: string) => json<OfficeState>(wh, ["office"]),
-  audit: (wh: string, pallet?: string) => json(wh, pallet ? ["audit", pallet] : ["audit"]),
+  /** `full` also re-reads every chunk and re-verifies each large file's content hash (0.3+). */
+  audit: (wh: string, pallet?: string, full = false) =>
+    json(wh, ["audit", ...(pallet ? [pallet] : []), ...(full ? ["--full"] : [])]),
   officeEnroll: (wh: string, o: { offline?: boolean; protect?: boolean }) =>
     json<OfficeMessage>(wh, ["office", "enroll", ...(o.offline ? ["--offline"] : []), ...(o.protect ? ["--passphrase"] : [])]),
   officeKeygen: (wh: string, protect: boolean) =>
